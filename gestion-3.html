@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Alfind — Gestion</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+  firebase.initializeApp({ databaseURL: "https://alfind-d4f0f-default-rtdb.firebaseio.com" });
+  const db = firebase.database();
+  async function fbGet(key) { try { const s = await db.ref("alfind/" + key).get(); return s.exists() ? s.val() : null; } catch { return null; } }
+  async function fbSet(key, val) { try { await db.ref("alfind/" + key).set(val); return true; } catch { return false; } }
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f5f7fa; }
+input, select, textarea { font-family: inherit; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: #e2e8ee; border-radius: 4px; }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:none; transition:all 0.15s; font-family:inherit; }
+.btn-primary { background:#1a6ef5; color:#fff; }
+.btn-primary:hover { background:#155fd4; }
+.btn-secondary { background:#f5f7fa; color:#0d1117; border:1px solid #e2e8ee; }
+.btn-secondary:hover { background:#e2e8ee; }
+.btn-danger { background:#fdeaea; color:#e5343a; }
+.btn-sm { padding:6px 12px; font-size:12px; border-radius:6px; }
+.field { display:flex; flex-direction:column; gap:5px; }
+.field label { font-size:12px; font-weight:600; color:#2e3a4a; }
+.field input, .field select, .field textarea { background:#f5f7fa; border:1.5px solid #e2e8ee; border-radius:8px; padding:9px 12px; font-size:13px; color:#0d1117; outline:none; transition:border-color 0.15s; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color:#1a6ef5; background:#fff; }
+.field textarea { resize:vertical; min-height:64px; }
+.bnav-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:none; background:none; cursor:pointer; font-size:10px; font-weight:600; color:#aab4c0; font-family:inherit; padding:8px 0; transition:color 0.15s; }
+.bnav-btn.active { color:#1a6ef5; }
+.presta-tag { display:inline-block; padding:3px 10px; background:#f5f7fa; border:1px solid #e2e8ee; border-radius:6px; font-size:11px; color:#2e3a4a; }
+.row-hover:hover { background:#f8fafc !important; cursor:pointer; }
+@keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect } = React;
+
+const SK  = "alfind_gestion_c";
+const PK  = "alfind_gestion_p";
+const PRK = "alfind_gestion_pr";
+
+function lsGet(k, fb) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } }
+function lsSet(k, v)  { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+
+const PROSPECT_STATUSES = {
+  a_contacter:  { label:"À contacter",  bg:"#f3f4f6", color:"#6b7a8d" },
+  contact_pris: { label:"Contact pris", bg:"#e8f0fe", color:"#1a6ef5" },
+  devis_envoye: { label:"Devis envoyé", bg:"#fff3e0", color:"#f58c1a" },
+  relance:      { label:"Relancé",      bg:"#fdf4ff", color:"#9333ea" },
+  gagne:        { label:"Gagné 🎉",     bg:"#e6f7f0", color:"#0da860" },
+  perdu:        { label:"Perdu",        bg:"#fdeaea", color:"#e5343a" },
+};
+
+function monthKey(date) {
+  const d = date || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+
+const SEED = [
+  { id:"bat2",  ref:"ALF-2025-001", name:"BAT 2 — Square Jean Bouin",  address:"3 Square Jean Bouin, 13009 Marseille", contact:"", contactInfo:"", advisorName:"", advisorInfo:"", start:"2025-10-01", end:"", ongoing:true, amount:195,  freq:"mensuel", passages:"1", prestations:["Balayage parties communes","Lavage sols","Nettoyage escaliers"], notes:"", docLink:"" },
+  { id:"bat3",  ref:"ALF-2025-002", name:"BAT 3 — Square Jean Bouin",  address:"3 Square Jean Bouin, 13009 Marseille", contact:"", contactInfo:"", advisorName:"", advisorInfo:"", start:"2025-01-02", end:"", ongoing:true, amount:340,  freq:"mensuel", passages:"1", prestations:["Balayage parties communes","Lavage sols","Nettoyage escaliers"], notes:"", docLink:"" },
+  { id:"bat4",  ref:"ALF-2026-003", name:"BAT 4 — Square Jean Bouin",  address:"3 Square Jean Bouin, 13009 Marseille", contact:"M. Ouhab Adel", contactInfo:"", advisorName:"", advisorInfo:"", start:"2026-05-01", end:"", ongoing:true, amount:294,  freq:"mensuel", passages:"1", prestations:["Balayage parties communes","Lavage sols","Nettoyage escaliers","Évacuation déchets"], notes:"", docLink:"" },
+  { id:"bat6",  ref:"ALF-2025-004", name:"BAT 6 — Square Jean Bouin",  address:"3 Square Jean Bouin, 13009 Marseille", contact:"", contactInfo:"", advisorName:"", advisorInfo:"", start:"2025-11-01", end:"", ongoing:true, amount:170,  freq:"mensuel", passages:"1", prestations:["Balayage parties communes","Lavage sols","Nettoyage escaliers"], notes:"", docLink:"" },
+  { id:"bat8",  ref:"ALF-2024-005", name:"BAT 8 — Square Jean Bouin",  address:"3 Square Jean Bouin, 13009 Marseille", contact:"M. Ouhab Charaf", contactInfo:"", advisorName:"", advisorInfo:"", start:"2024-03-01", end:"", ongoing:true, amount:200,  freq:"mensuel", passages:"1", prestations:["Balayage parties communes","Lavage sols","Nettoyage escaliers","Nettoyage locaux poubelles"], notes:"", docLink:"" },
+  { id:"bat16", ref:"ALF-2026-006", name:"BAT 16 — Square Jean Bouin", address:"3 Square Jean Bouin, 13009 Marseille", contact:"", contactInfo:"", advisorName:"", advisorInfo:"", start:"2026-09-01", end:"", ongoing:true, amount:290,  freq:"mensuel", passages:"1", prestations:["Balayage parties communes","Lavage sols","Nettoyage escaliers"], notes:"", docLink:"" },
+];
+
+const PRESTATIONS_LIST = ["Balayage parties communes","Lavage sols","Nettoyage vitres","Entretien halls","Évacuation déchets","Nettoyage escaliers","Nettoyage parkings","Nettoyage locaux poubelles","Entretien espaces verts","Nettoyage toits/terrasses"];
+const FREQ_LABEL = { mensuel:"/mois", trimestriel:"/trim.", annuel:"/an", ponctuel:"(ponct.)" };
+
+function genId() { return "c_" + Date.now() + Math.random().toString(36).slice(2,6); }
+
+function computeStatus(c) {
+  if (c.status === "brouillon" || c.status === "suspendu") return c.status;
+  if (c.ongoing || !c.end) return "en_cours";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.ceil((new Date(c.end) - today) / 86400000);
+  if (diff < 0) return "expire";
+  if (diff <= 60) return "expire_bientot";
+  return "actif";
+}
+
+function daysLeft(c) {
+  if (c.ongoing || !c.end) return Infinity;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((new Date(c.end) - today) / 86400000);
+}
+
+function fmtDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" });
+}
+
+const STATUS_CONFIG = {
+  actif:          { label:"Actif",          bg:"#e6f7f0", color:"#0da860" },
+  en_cours:       { label:"En cours ∞",     bg:"#e0fdf4", color:"#059669" },
+  expire_bientot: { label:"Expire bientôt", bg:"#fff3e0", color:"#f58c1a" },
+  expire:         { label:"Expiré",         bg:"#fdeaea", color:"#e5343a" },
+  brouillon:      { label:"Brouillon",      bg:"#e8f0fe", color:"#1a6ef5" },
+  suspendu:       { label:"Suspendu",       bg:"#f3f4f6", color:"#6b7a8d" },
+};
+
+function Badge({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.brouillon;
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 10px", borderRadius:20, background:cfg.bg, color:cfg.color, fontSize:11, fontWeight:700 }}>
+      <span style={{ width:6, height:6, borderRadius:"50%", background:cfg.color, opacity:0.8, display:"inline-block" }}/>
+      {cfg.label}
+    </span>
+  );
+}
+
+const EMPTY = { ref:"", name:"", address:"", contact:"", contactInfo:"", advisorName:"", advisorInfo:"", start:new Date().toISOString().slice(0,10), end:"", ongoing:true, status:"actif", amount:"", freq:"mensuel", passages:"1", prestations:[], notes:"", docLink:"" };
+const EMPTY_PROSPECT = { name:"", address:"", contact:"", contactInfo:"", advisorName:"", advisorInfo:"", status:"a_contacter", montantEstime:"", notes:"", dateContact:"" };
+
+function App() {
+  const [contracts, setContracts] = useState(() => lsGet(SK, SEED));
+  const [payments,  setPayments]  = useState(() => lsGet(PK, {}));
+  const [prospects, setProspects] = useState(() => lsGet(PRK, []));
+  const [page, setPage] = useState("contracts");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [modal, setModal] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [prospectModal, setProspectModal] = useState(null);
+  const [showSync, setShowSync] = useState(false);
+  const [syncInput, setSyncInput] = useState("");
+  const [toast, setToast] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [sendingMail, setSendingMail] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  // Charge depuis Firebase au démarrage
+  useEffect(() => {
+    setSyncing(true);
+    Promise.all([fbGet("contracts"), fbGet("payments"), fbGet("prospects")]).then(([c, p, pr]) => {
+      if (c && c.length) { setContracts(c); lsSet(SK, c); }
+      if (p) { setPayments(p); lsSet(PK, p); }
+      if (pr) { setProspects(pr); lsSet(PRK, pr); }
+      setSyncing(false);
+    }).catch(() => setSyncing(false));
+  }, []);
+
+  function saveContracts(list) {
+    setContracts(list); lsSet(SK, list);
+    fbSet("contracts", list);
+  }
+  function savePayments(p) {
+    setPayments(p); lsSet(PK, p);
+    fbSet("payments", p);
+  }
+  function saveProspects(list) {
+    setProspects(list); lsSet(PRK, list);
+    fbSet("prospects", list);
+  }
+
+  function showToast(msg, type="success") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  // ── SYNC CODE ──
+  function getSyncCode() {
+    const data = { c: contracts, p: payments, pr: prospects };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  }
+  function importFromCode(code) {
+    try {
+      const data = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+      if (data.c?.length) saveContracts(data.c);
+      if (data.p) savePayments(data.p);
+      if (data.pr) saveProspects(data.pr);
+      setShowSync(false);
+      showToast("✅ Données importées !");
+    } catch { showToast("❌ Code invalide", "error"); }
+  }
+
+  // ── PAYMENTS ──
+  function togglePayment(contractId, mk) {
+    const key = `${contractId}_${mk}`;
+    const updated = { ...payments };
+    if (updated[key]) { delete updated[key]; } else { updated[key] = true; }
+    savePayments(updated);
+    showToast(updated[key] ? "✅ Paiement enregistré" : "↩ Annulé");
+  }
+  function isPaid(contractId, mk) { return !!payments[`${contractId}_${mk}`]; }
+
+  // ── CONTRACTS ──
+  function openAdd() {
+    setModal({ mode:"add", data:{ ...EMPTY, ref:"ALF-"+new Date().getFullYear()+"-"+String(contracts.length+1).padStart(3,"0") }});
+  }
+  function openEdit(c) { setDetail(null); setModal({ mode:"edit", data:{...c} }); }
+
+  function saveContractForm() {
+    const d = modal.data;
+    if (!d.name.trim()) { showToast("⚠ Nom requis", "error"); return; }
+    if (!d.ongoing && !d.end) { showToast("⚠ Date de fin requise ou En cours", "error"); return; }
+    setSaving(true);
+    let updated;
+    if (modal.mode === "edit") {
+      updated = contracts.map(c => c.id === d.id ? { ...d, amount: parseFloat(d.amount)||0 } : c);
+    } else {
+      updated = [...contracts, { ...d, id: genId(), amount: parseFloat(d.amount)||0 }];
+    }
+    saveContracts(updated);
+    setSaving(false);
+    setModal(null);
+    showToast(modal.mode === "edit" ? "✅ Contrat mis à jour" : "✅ Contrat ajouté");
+  }
+
+  function deleteContract(id) {
+    if (!confirm("Supprimer ce contrat ?")) return;
+    saveContracts(contracts.filter(c => c.id !== id));
+    setDetail(null);
+    showToast("🗑 Supprimé");
+  }
+
+  function togglePresta(p) {
+    const list = modal.data.prestations || [];
+    setModal(m => ({ ...m, data: { ...m.data, prestations: list.includes(p) ? list.filter(x=>x!==p) : [...list, p] }}));
+  }
+
+  // ── PROSPECTS ──
+  function saveProspect() {
+    const d = prospectModal.data;
+    if (!d.name.trim()) { showToast("⚠ Nom requis", "error"); return; }
+    let updated;
+    if (prospectModal.mode === "edit") {
+      updated = prospects.map(p => p.id === d.id ? d : p);
+    } else {
+      updated = [...prospects, { ...d, id: genId() }];
+    }
+    saveProspects(updated);
+    setProspectModal(null);
+    showToast(prospectModal.mode === "edit" ? "✅ Mis à jour" : "✅ Prospect ajouté");
+  }
+
+  function deleteProspect(id) {
+    if (!confirm("Supprimer ce prospect ?")) return;
+    saveProspects(prospects.filter(p => p.id !== id));
+    showToast("🗑 Supprimé");
+  }
+
+  function convertToContract(p) {
+    setProspectModal(null);
+    setModal({ mode:"add", data:{ ...EMPTY, name:p.name, address:p.address||"", contact:p.contact||"", contactInfo:p.contactInfo||"", advisorName:p.advisorName||"", advisorInfo:p.advisorInfo||"", amount:p.montantEstime||"", ref:"ALF-"+new Date().getFullYear()+"-"+String(contracts.length+1).padStart(3,"0") }});
+    setPage("contracts");
+    showToast("📋 Converti — complète et enregistre");
+  }
+
+  // ── STATS ──
+  const active = contracts.filter(c => ["actif","en_cours","expire_bientot"].includes(computeStatus(c)));
+  const mrr = active.reduce((s,c) => { const a=Number(c.amount)||0; return s+(c.freq==="mensuel"?a:c.freq==="trimestriel"?a/3:c.freq==="annuel"?a/12:0); }, 0);
+  const expiring = contracts.filter(c => computeStatus(c)==="expire_bientot");
+  const expired  = contracts.filter(c => computeStatus(c)==="expire");
+  const alertCount = contracts.filter(c => ["expire","expire_bientot"].includes(computeStatus(c))).length;
+
+  const filtered = contracts.filter(c => {
+    const q = search.toLowerCase();
+    const matchQ = !q || c.name.toLowerCase().includes(q) || c.ref.toLowerCase().includes(q);
+    const matchS = !statusFilter || computeStatus(c) === statusFilter;
+    return matchQ && matchS;
+  });
+
+  // ── ANNIVERSAIRES ──
+  function getAnnivAlerts() {
+    const today = new Date(); today.setHours(0,0,0,0);
+    return contracts.filter(c => {
+      if (!c.start) return false;
+      const s = new Date(c.start);
+      let next = new Date(today.getFullYear(), s.getMonth(), s.getDate());
+      if (next < today) next.setFullYear(next.getFullYear()+1);
+      const diff = Math.ceil((next-today)/86400000);
+      return diff <= 30 && diff >= 0;
+    }).map(c => {
+      const s = new Date(c.start);
+      let next = new Date(today.getFullYear(), s.getMonth(), s.getDate());
+      if (next < today) next.setFullYear(next.getFullYear()+1);
+      const diff = Math.ceil((next-today)/86400000);
+      return { ...c, nextAnniv:next, daysUntil:diff, years:next.getFullYear()-s.getFullYear() };
+    });
+  }
+
+  async function sendAnnivAlerts() {
+    const alerts = getAnnivAlerts();
+    if (!alerts.length) { showToast("Aucun anniversaire dans 30j"); return; }
+    setSendingMail(true);
+    try {
+      const list = alerts.map(a=>`• ${a.name} — ${a.nextAnniv.toLocaleDateString("fr-FR")} (J-${a.daysUntil}) · ${a.years}an · ${Number(a.amount).toLocaleString("fr-FR")}€`).join("\n");
+      const body = `Bonjour,\n\nAnniversaires de contrats dans 30 jours :\n\n${list}\n\nAlfind`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:500,
+          mcp_servers:[{type:"url",url:"https://gmail.mcp.claude.com/mcp",name:"gmail"}],
+          messages:[{role:"user",content:`Envoie un email à charafeddin.ouhab@gmail.com. Objet: 🔔 Alfind — ${alerts.length} anniversaire(s) dans 30j. Corps: ${body}`}]})
+      });
+      const d = await res.json();
+      if (d.content) showToast(`✅ Email envoyé (${alerts.length} contrat(s))`);
+      else throw new Error();
+    } catch { showToast("❌ Erreur envoi email", "error"); }
+    setSendingMail(false);
+  }
+
+  const setF = (k,v) => setModal(m=>({...m, data:{...m.data, [k]:v}}));
+  const setP = (k,v) => setProspectModal(m=>({...m, data:{...m.data, [k]:v}}));
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#f5f7fa", paddingBottom:72 }}>
+
+      {/* TOPBAR */}
+      <div style={{ background:"#fff", borderBottom:"1px solid #e2e8ee", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:50 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:20, fontWeight:700, color:"#0d1117" }}>Alfind</span>
+          <span style={{ fontSize:11, color:"#aab4c0", letterSpacing:"0.1em", textTransform:"uppercase", borderLeft:"1px solid #e2e8ee", paddingLeft:10 }}>
+            {page==="contracts"?"Contrats":page==="prospects"?"Prospects":page==="alerts"?"Alertes":"Stats"}
+          </span>
+          {syncing && <span style={{ fontSize:10, color:"#f58c1a" }}>⟳ sync…</span>}
+          {!syncing && <span style={{ fontSize:10, color:"#0da860" }}>☁ Firebase</span>}
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button className="btn btn-secondary btn-sm" title="Forcer la sync" onClick={async()=>{
+            showToast("⟳ Envoi vers Firebase…");
+            await Promise.all([
+              fbSet("contracts", contracts),
+              fbSet("payments", payments),
+              fbSet("prospects", prospects)
+            ]);
+            showToast("✅ Toutes les données synchronisées !");
+          }}>☁ Sync</button>
+          {page==="contracts" && <button className="btn btn-primary btn-sm" onClick={openAdd}>＋ Nouveau</button>}
+          {page==="prospects" && <button className="btn btn-primary btn-sm" onClick={()=>setProspectModal({mode:"add",data:{...EMPTY_PROSPECT}})}>＋ Nouveau</button>}
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div style={{ padding:"16px", maxWidth:900, margin:"0 auto" }}>
+
+        {/* PAGE CONTRATS */}
+        {page==="contracts" && <>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+            {[
+              {label:"Contrats actifs", value:active.length, sub:`${contracts.length} total`, pillColor:"#0da860", pillBg:"#e6f7f0", pill:"✓ En cours"},
+              {label:"MRR estimé", value:`${Math.round(mrr).toLocaleString("fr-FR")} €`, sub:"HT mensuel", pillColor:"#1a6ef5", pillBg:"#e8f0fe", pill:"Mensuel"},
+              {label:"Expire bientôt", value:expiring.length, sub:"Dans 60 jours", pillColor:"#f58c1a", pillBg:"#fff3e0", pill:"⚠ Renouveler"},
+              {label:"Expirés", value:expired.length, sub:"À relancer", pillColor:"#e5343a", pillBg:"#fdeaea", pill:"Expiré"},
+            ].map((s,i) => (
+              <div key={i} style={{ background:"#fff", borderRadius:12, padding:"14px 16px", border:"1px solid #e2e8ee" }}>
+                <div style={{ fontSize:10, color:"#6b7a8d", textTransform:"uppercase", letterSpacing:"0.1em" }}>{s.label}</div>
+                <div style={{ fontSize:24, fontWeight:700, color:"#0d1117", margin:"4px 0 2px" }}>{s.value}</div>
+                <div style={{ fontSize:11, color:"#6b7a8d" }}>{s.sub}</div>
+                <span style={{ display:"inline-block", marginTop:5, padding:"2px 8px", borderRadius:20, background:s.pillBg, color:s.pillColor, fontSize:10, fontWeight:700 }}>{s.pill}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background:"#fff", borderRadius:"12px 12px 0 0", border:"1px solid #e2e8ee", borderBottom:"none", padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+            <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
+              style={{ background:"#f5f7fa", border:"1px solid #e2e8ee", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", color:"#0d1117", width:"100%" }}/>
+            <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
+              style={{ background:"#f5f7fa", border:"1px solid #e2e8ee", borderRadius:8, padding:"8px 10px", fontSize:13, color:"#0d1117", outline:"none" }}>
+              <option value="">Tous les statuts</option>
+              <option value="en_cours">En cours</option>
+              <option value="actif">Actif</option>
+              <option value="expire_bientot">Expire bientôt</option>
+              <option value="expire">Expiré</option>
+              <option value="brouillon">Brouillon</option>
+            </select>
+          </div>
+
+          <div style={{ background:"#f5f7fa", border:"1px solid #e2e8ee", borderRadius:"0 0 12px 12px", padding:"8px 0 4px" }}>
+            {filtered.length===0 ? (
+              <div style={{ textAlign:"center", padding:"40px", color:"#6b7a8d" }}>
+                <div style={{ fontSize:32 }}>📋</div>
+                <div style={{ fontWeight:600, color:"#2e3a4a", marginTop:8 }}>Aucun contrat</div>
+              </div>
+            ) : filtered.map(c => {
+              const st = computeStatus(c);
+              const days = daysLeft(c);
+              const billingDate = new Date(); billingDate.setMonth(billingDate.getMonth()-1);
+              const billingMk = monthKey(billingDate);
+              const billingPaid = isPaid(c.id, billingMk);
+              return (
+                <div key={c.id} className="row-hover" onClick={()=>setDetail(c)}
+                  style={{ background:"#fff", margin:"0 12px 8px", borderRadius:12, border:`1px solid ${billingPaid?"#86efac":"#e2e8ee"}`, padding:"14px 16px", animation:"slideUp 0.2s ease" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:14, color:"#0d1117" }}>{c.name}</div>
+                      <div style={{ fontSize:11, color:"#6b7a8d", marginTop:2 }}>{c.address}</div>
+                    </div>
+                    <Badge status={st}/>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <span style={{ fontWeight:700, fontSize:15, color:"#1a6ef5" }}>{c.amount ? `${Number(c.amount).toLocaleString("fr-FR")} €` : "—"}</span>
+                      <span style={{ fontSize:11, color:"#6b7a8d", marginLeft:4 }}>{FREQ_LABEL[c.freq]||""}</span>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:"#1a6ef5", background:"#e8f0fe", borderRadius:20, padding:"2px 8px" }}>{c.passages||"1"}x/sem</span>
+                      <span style={{ fontSize:12, color:days===Infinity?"#059669":days<0?"#e5343a":days<60?"#f58c1a":"#6b7a8d" }}>
+                        {days===Infinity?"∞":days<0?"Expiré":`${days}j`}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #f0f4f8", display:"flex", alignItems:"center", justifyContent:"space-between" }}
+                    onClick={e=>e.stopPropagation()}>
+                    <span style={{ fontSize:11, color:"#6b7a8d", textTransform:"capitalize" }}>
+                      {billingDate.toLocaleDateString("fr-FR",{month:"long"})}
+                    </span>
+                    <button onClick={e=>{e.stopPropagation();togglePayment(c.id,billingMk);}}
+                      style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                        background:billingPaid?"#dcfce7":"#f5f7fa", color:billingPaid?"#16a34a":"#6b7a8d", transition:"all 0.15s" }}>
+                      {billingPaid?"✓ Payé":"○ Non payé"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>}
+
+        {/* PAGE ALERTES */}
+        {page==="alerts" && <>
+          {(() => {
+            const annivs = getAnnivAlerts();
+            return (
+              <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8ee", marginBottom:16 }}>
+                <div style={{ padding:"16px", borderBottom:"1px solid #e2e8ee", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontWeight:600, fontSize:15 }}>🎂 Anniversaires (30j)</span>
+                  <button className="btn btn-primary btn-sm" onClick={sendAnnivAlerts} disabled={sendingMail}>
+                    {sendingMail?"Envoi…":"📧 Alertes email"}
+                  </button>
+                </div>
+                <div style={{ padding:"12px" }}>
+                  {annivs.length===0 ? (
+                    <div style={{ textAlign:"center", padding:"20px", color:"#6b7a8d", fontSize:13 }}>Aucun anniversaire dans 30 jours.</div>
+                  ) : annivs.map(a => (
+                    <div key={a.id} style={{ background:"#e8f0fe", border:"1px solid #b3cffc", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div>
+                        <div style={{ fontWeight:600, fontSize:13 }}>{a.name}</div>
+                        <div style={{ fontSize:12, color:"#6b7a8d", marginTop:2 }}>{a.nextAnniv.toLocaleDateString("fr-FR")} · {a.years}an · {Number(a.amount).toLocaleString("fr-FR")} €</div>
+                      </div>
+                      <span style={{ fontWeight:700, fontSize:13, color:"#1a6ef5" }}>J-{a.daysUntil}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8ee" }}>
+            <div style={{ padding:"16px", borderBottom:"1px solid #e2e8ee", fontWeight:600, fontSize:15 }}>🔔 Alertes contrats</div>
+            <div style={{ padding:"12px" }}>
+              {contracts.filter(c=>!["en_cours","actif"].includes(computeStatus(c))).length===0 ? (
+                <div style={{ textAlign:"center", padding:"32px", color:"#6b7a8d" }}>
+                  <div style={{ fontSize:32 }}>✅</div>
+                  <div style={{ fontWeight:600, color:"#2e3a4a", marginTop:8 }}>Aucune alerte</div>
+                </div>
+              ) : contracts.filter(c=>!["en_cours","actif"].includes(computeStatus(c))).map(c => {
+                const st = computeStatus(c);
+                const days = daysLeft(c);
+                const cfg = st==="expire"?{bg:"#fdeaea",border:"#f7b4b5",icon:"🔴"}:st==="expire_bientot"?{bg:"#fff3e0",border:"#fbd69a",icon:"🟠"}:{bg:"#e8f0fe",border:"#b3cffc",icon:"🔵"};
+                return (
+                  <div key={c.id} style={{ background:cfg.bg, border:`1px solid ${cfg.border}`, borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", gap:10 }}>
+                    <span style={{ fontSize:16 }}>{cfg.icon}</span>
+                    <div style={{ fontSize:13, lineHeight:1.5 }}>
+                      <strong>{c.name}</strong> — {st==="expire"?`Expiré depuis ${Math.abs(days)}j`:st==="expire_bientot"?`Expire dans ${days}j`:"Brouillon en attente"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>}
+
+        {/* PAGE STATS */}
+        {page==="stats" && <>
+          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8ee", marginBottom:16 }}>
+            <div style={{ padding:"16px", borderBottom:"1px solid #e2e8ee", fontWeight:600, fontSize:15 }}>💰 Revenus par contrat</div>
+            <div style={{ padding:"16px" }}>
+              {active.length===0 ? <div style={{ color:"#6b7a8d", fontSize:13 }}>Aucun contrat actif.</div> : (() => {
+                const max = Math.max(...active.map(c=>Number(c.amount)||0));
+                return active.map(c => (
+                  <div key={c.id} style={{ marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:5 }}>
+                      <span style={{ fontWeight:500 }}>{c.name.replace("— Square Jean Bouin","").trim()}</span>
+                      <span style={{ fontWeight:700, color:"#1a6ef5" }}>{Number(c.amount).toLocaleString("fr-FR")} €{FREQ_LABEL[c.freq]}</span>
+                    </div>
+                    <div style={{ background:"#f5f7fa", borderRadius:4, height:6, overflow:"hidden" }}>
+                      <div style={{ width:`${(Number(c.amount)||0)/max*100}%`, background:"#1a6ef5", height:"100%", borderRadius:4 }}/>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8ee" }}>
+            <div style={{ padding:"16px", borderBottom:"1px solid #e2e8ee", fontWeight:600, fontSize:15 }}>📊 Résumé</div>
+            <div style={{ padding:"16px" }}>
+              {[
+                ["Contrats actifs / en cours", active.length],
+                ["CA mensuel HT", `${Math.round(mrr).toLocaleString("fr-FR")} €`],
+                ["CA annuel HT estimé", `${Math.round(mrr*12).toLocaleString("fr-FR")} €`],
+                ["Contrats à renouveler", expiring.length],
+                ["Total contrats", contracts.length],
+              ].map(([k,v],i) => (
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:i<4?"1px solid #f5f7fa":"none", fontSize:13 }}>
+                  <span style={{ color:"#6b7a8d" }}>{k}</span>
+                  <span style={{ fontWeight:700 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>}
+
+        {/* PAGE PROSPECTS */}
+        {page==="prospects" && <>
+          <div style={{ marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontSize:13, color:"#6b7a8d" }}>{prospects.length} prospect(s)</div>
+          </div>
+          {Object.entries(PROSPECT_STATUSES).map(([st, cfg]) => {
+            const list = prospects.filter(p => p.status === st);
+            if (!list.length) return null;
+            return (
+              <div key={st} style={{ marginBottom:16 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 10px", borderRadius:20, background:cfg.bg, color:cfg.color, fontSize:11, fontWeight:700 }}>
+                    <span style={{ width:6, height:6, borderRadius:"50%", background:cfg.color, opacity:0.8, display:"inline-block" }}/>{cfg.label}
+                  </span>
+                  <span style={{ fontSize:11, color:"#aab4c0" }}>{list.length}</span>
+                </div>
+                {list.map(p => (
+                  <div key={p.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8ee", padding:"14px 16px", marginBottom:8 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:"#0d1117" }}>{p.name}</div>
+                    {p.address && <div style={{ fontSize:11, color:"#6b7a8d", marginTop:2 }}>{p.address}</div>}
+                    {p.contact && <div style={{ fontSize:12, color:"#2e3a4a", marginTop:4 }}>👤 {p.contact}</div>}
+                    {p.montantEstime && <div style={{ fontSize:13, fontWeight:700, color:"#1a6ef5", marginTop:6 }}>~{Number(p.montantEstime).toLocaleString("fr-FR")} €/mois</div>}
+                    {p.notes && <div style={{ fontSize:12, color:"#6b7a8d", marginTop:4, fontStyle:"italic" }}>{p.notes}</div>}
+                    <div style={{ display:"flex", gap:6, marginTop:10, flexWrap:"wrap" }}>
+                      <select value={p.status} onChange={e=>{
+                        const u=prospects.map(x=>x.id===p.id?{...x,status:e.target.value}:x);
+                        saveProspects(u);
+                      }} style={{ fontSize:11, padding:"4px 8px", borderRadius:20, border:"1px solid #e2e8ee", background:cfg.bg, color:cfg.color, fontWeight:700, cursor:"pointer", outline:"none" }}>
+                        {Object.entries(PROSPECT_STATUSES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                      <button className="btn btn-secondary btn-sm" onClick={()=>setProspectModal({mode:"edit",data:{...p}})}>✏️</button>
+                      {p.status==="gagne" && <button className="btn btn-primary btn-sm" onClick={()=>convertToContract(p)}>📋 → Contrat</button>}
+                      <button className="btn btn-danger btn-sm" onClick={()=>deleteProspect(p.id)}>🗑</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          {prospects.length===0 && (
+            <div style={{ textAlign:"center", padding:"48px 20px", color:"#6b7a8d" }}>
+              <div style={{ fontSize:36 }}>🎯</div>
+              <div style={{ fontWeight:700, color:"#2e3a4a", fontSize:15, marginTop:10 }}>Aucun prospect</div>
+            </div>
+          )}
+        </>}
+
+      </div>
+
+      {/* BOTTOM NAV */}
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1px solid #e2e8ee", display:"flex", height:64, zIndex:100, boxShadow:"0 -4px 20px rgba(13,17,23,0.07)" }}>
+        {[
+          {key:"contracts", icon:"📋", label:"Contrats"},
+          {key:"prospects", icon:"🎯", label:"Prospects"},
+          {key:"alerts",   icon:"🔔", label:"Alertes", badge:alertCount},
+          {key:"stats",    icon:"📊", label:"Stats"},
+        ].map(n => (
+          <button key={n.key} className={`bnav-btn ${page===n.key?"active":""}`} onClick={()=>setPage(n.key)} style={{ position:"relative" }}>
+            <span style={{ fontSize:18 }}>{n.icon}</span>
+            {n.label}
+            {n.badge>0 && <span style={{ position:"absolute", top:4, right:"calc(50% - 18px)", background:"#e5343a", color:"#fff", borderRadius:20, padding:"1px 5px", fontSize:9, fontWeight:700 }}>{n.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* DETAIL PANEL */}
+      {detail && (() => {
+        const c = contracts.find(x=>x.id===detail.id) || detail;
+        const st = computeStatus(c);
+        const days = daysLeft(c);
+        const annual = c.freq==="mensuel"?c.amount*12:c.freq==="trimestriel"?c.amount*4:c.freq==="annuel"?c.amount:0;
+        return (
+          <div onClick={()=>setDetail(null)} style={{ position:"fixed", inset:0, background:"rgba(13,17,23,0.45)", zIndex:200, display:"flex", alignItems:"flex-end", animation:"fadeIn 0.2s" }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"88vh", overflowY:"auto", animation:"slideUp 0.25s ease" }}>
+              <div style={{ background:"#0d1117", padding:"20px 20px 16px", position:"relative" }}>
+                <div style={{ fontSize:10, color:"#aab4c0", marginBottom:4 }}>{c.ref}</div>
+                <div style={{ fontSize:20, fontWeight:700, color:"#fff" }}>{c.name}</div>
+                <div style={{ fontSize:12, color:"#aab4c0", marginTop:3 }}>{c.address}</div>
+                <button onClick={()=>setDetail(null)} style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,0.12)", border:"none", borderRadius:8, width:32, height:32, color:"#fff", fontSize:18, cursor:"pointer" }}>✕</button>
+              </div>
+              <div style={{ padding:"20px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                  <Badge status={st}/>
+                  <span style={{ fontSize:13, fontWeight:600, color:days===Infinity?"#059669":days<0?"#e5343a":days<60?"#f58c1a":"#0da860" }}>
+                    {days===Infinity?"∞ En cours":days<0?"Expiré":`${days}j restants`}
+                  </span>
+                </div>
+                {[
+                  ["Début", fmtDate(c.start)],
+                  ["Fin", c.ongoing||!c.end?"∞ En cours":fmtDate(c.end)],
+                  ["Montant", c.amount?`${Number(c.amount).toLocaleString("fr-FR")} € HT ${FREQ_LABEL[c.freq]||""}`:"—"],
+                  ["Passages", `${c.passages||"1"} / semaine`],
+                  annual>0?["CA annuel est.", `${Number(annual).toLocaleString("fr-FR")} €`]:null,
+                ].filter(Boolean).map(([k,v],i) => (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #f5f7fa", fontSize:13 }}>
+                    <span style={{ color:"#6b7a8d" }}>{k}</span>
+                    <span style={{ fontWeight:600, color:k==="CA annuel est."?"#1a6ef5":"#0d1117" }}>{v}</span>
+                  </div>
+                ))}
+                {(c.contact||c.contactInfo) && (
+                  <div style={{ marginTop:12 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Syndic</div>
+                    {c.contact && <div style={{ fontSize:13, fontWeight:600 }}>{c.contact}</div>}
+                    {c.contactInfo && <div style={{ fontSize:12, color:"#6b7a8d", marginTop:2 }}>{c.contactInfo}</div>}
+                  </div>
+                )}
+                {(c.advisorName||c.advisorInfo) && (
+                  <div style={{ marginTop:12 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Conseiller syndical</div>
+                    {c.advisorName && <div style={{ fontSize:13, fontWeight:600 }}>{c.advisorName}</div>}
+                    {c.advisorInfo && <div style={{ fontSize:12, color:"#6b7a8d", marginTop:2 }}>{c.advisorInfo}</div>}
+                  </div>
+                )}
+                {(c.prestations||[]).length>0 && (
+                  <div style={{ marginTop:14 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:8 }}>Prestations</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {c.prestations.map(p => <span key={p} className="presta-tag">{p}</span>)}
+                    </div>
+                  </div>
+                )}
+                {c.notes && (
+                  <div style={{ marginTop:14 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", marginBottom:6 }}>Notes</div>
+                    <div style={{ fontSize:13, color:"#2e3a4a", lineHeight:1.6 }}>{c.notes}</div>
+                  </div>
+                )}
+                {/* Suivi paiements */}
+                <div style={{ marginTop:16 }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:10 }}>💶 Suivi paiements</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
+                    {Array.from({length:6}, (_,i) => {
+                      const d = new Date(); d.setMonth(d.getMonth()-(5-i));
+                      const mk = monthKey(d);
+                      const paid = isPaid(c.id, mk);
+                      const label = d.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"});
+                      const billingD = new Date(); billingD.setMonth(billingD.getMonth()-1);
+                      const isBilling = mk===monthKey(billingD);
+                      return (
+                        <button key={mk} onClick={()=>togglePayment(c.id,mk)}
+                          style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${paid?"#86efac":isBilling?"#1a6ef5":"#e2e8ee"}`, background:paid?"#dcfce7":isBilling?"#e8f0fe":"#f5f7fa", cursor:"pointer", textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:paid?"#16a34a":isBilling?"#1a6ef5":"#6b7a8d", fontWeight:600 }}>{label}{isBilling?" ←":""}</div>
+                          <div style={{ fontSize:14, marginTop:3 }}>{paid?"✓":"○"}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                  <button className="btn btn-primary btn-sm" onClick={()=>openEdit(c)}>✏️ Modifier</button>
+                  <button className="btn btn-danger btn-sm" onClick={()=>deleteContract(c.id)}>🗑 Supprimer</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL CONTRAT */}
+      {modal && (() => {
+        const d = modal.data;
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(13,17,23,0.5)", zIndex:300, display:"flex", alignItems:"flex-end", animation:"fadeIn 0.15s" }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"92vh", overflowY:"auto", animation:"slideUp 0.2s ease" }}>
+              <div style={{ padding:"20px 20px 0", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                <div>
+                  <div style={{ fontSize:20, fontWeight:700 }}>{modal.mode==="add"?"Nouveau contrat":"Modifier"}</div>
+                  {d.ref && <div style={{ fontSize:11, color:"#6b7a8d", marginTop:3 }}>{d.ref}</div>}
+                </div>
+                <button onClick={()=>setModal(null)} style={{ background:"#f5f7fa", border:"none", borderRadius:8, width:32, height:32, fontSize:18, color:"#6b7a8d", cursor:"pointer" }}>✕</button>
+              </div>
+              <div style={{ padding:"16px 20px 24px", display:"flex", flexDirection:"column", gap:12 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", borderBottom:"1px solid #e2e8ee", paddingBottom:6 }}>📍 Copropriété</div>
+                <div className="field"><label>Nom *</label><input value={d.name} onChange={e=>setF("name",e.target.value)} placeholder="BAT X — Square Jean Bouin"/></div>
+                <div className="field"><label>Adresse</label><input value={d.address} onChange={e=>setF("address",e.target.value)}/></div>
+                <div style={{ fontSize:10, fontWeight:600, color:"#6b7a8d" }}>Syndic</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Nom syndic</label><input value={d.contact||""} onChange={e=>setF("contact",e.target.value)}/></div>
+                  <div className="field"><label>Tél / Email</label><input value={d.contactInfo||""} onChange={e=>setF("contactInfo",e.target.value)}/></div>
+                </div>
+                <div style={{ fontSize:10, fontWeight:600, color:"#6b7a8d" }}>Conseiller syndical</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Nom conseiller</label><input value={d.advisorName||""} onChange={e=>setF("advisorName",e.target.value)}/></div>
+                  <div className="field"><label>Tél / Email</label><input value={d.advisorInfo||""} onChange={e=>setF("advisorInfo",e.target.value)}/></div>
+                </div>
+                <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", borderBottom:"1px solid #e2e8ee", paddingBottom:6 }}>📋 Contrat</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Montant HT (€)</label><input type="number" value={d.amount} onChange={e=>setF("amount",e.target.value)} placeholder="0"/></div>
+                  <div className="field"><label>Fréquence</label>
+                    <select value={d.freq} onChange={e=>setF("freq",e.target.value)}>
+                      <option value="mensuel">Mensuel</option>
+                      <option value="trimestriel">Trimestriel</option>
+                      <option value="annuel">Annuel</option>
+                      <option value="ponctuel">Ponctuel</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="field"><label>Passages / semaine</label>
+                  <select value={d.passages||"1"} onChange={e=>setF("passages",e.target.value)}>
+                    <option value="1">1 passage</option>
+                    <option value="2">2 passages</option>
+                  </select>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Date début</label><input type="date" value={d.start} onChange={e=>setF("start",e.target.value)}/></div>
+                  <div className="field">
+                    <label style={{ display:"flex", justifyContent:"space-between" }}>
+                      Date fin
+                      <label style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, fontWeight:400, color:"#059669", cursor:"pointer" }}>
+                        <input type="checkbox" checked={d.ongoing} onChange={e=>setF("ongoing",e.target.checked)}/> En cours
+                      </label>
+                    </label>
+                    <input type="date" value={d.end} disabled={d.ongoing} onChange={e=>setF("end",e.target.value)} style={{ opacity:d.ongoing?0.4:1 }}/>
+                  </div>
+                </div>
+                <div className="field"><label>Statut</label>
+                  <select value={d.status} onChange={e=>setF("status",e.target.value)}>
+                    <option value="actif">Actif</option>
+                    <option value="brouillon">Brouillon</option>
+                    <option value="suspendu">Suspendu</option>
+                    <option value="expire">Expiré</option>
+                  </select>
+                </div>
+                <div style={{ fontSize:10, fontWeight:700, color:"#6b7a8d", textTransform:"uppercase", borderBottom:"1px solid #e2e8ee", paddingBottom:6 }}>🧹 Prestations</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+                  {PRESTATIONS_LIST.map(p => (
+                    <label key={p} style={{ display:"flex", alignItems:"center", gap:5, background:(d.prestations||[]).includes(p)?"#e8f0fe":"#f5f7fa", border:`1px solid ${(d.prestations||[]).includes(p)?"#b3cffc":"#e2e8ee"}`, borderRadius:6, padding:"5px 10px", cursor:"pointer", fontSize:12, color:(d.prestations||[]).includes(p)?"#1a6ef5":"#2e3a4a" }}>
+                      <input type="checkbox" checked={(d.prestations||[]).includes(p)} onChange={()=>togglePresta(p)} style={{ display:"none" }}/>{p}
+                    </label>
+                  ))}
+                </div>
+                <div className="field"><label>Notes</label><textarea value={d.notes||""} onChange={e=>setF("notes",e.target.value)} placeholder="Accès, codes…"/></div>
+
+                
+                <div style={{ display:"flex", gap:10, marginTop:8 }}>
+                  <button className="btn btn-secondary" style={{ flex:1 }} onClick={()=>setModal(null)}>Annuler</button>
+                  <button className="btn btn-primary" style={{ flex:2 }} onClick={saveContractForm} disabled={saving}>{saving?"…":"💾 Enregistrer"}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL PROSPECT */}
+      {prospectModal && (() => {
+        const d = prospectModal.data;
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(13,17,23,0.5)", zIndex:300, display:"flex", alignItems:"flex-end", animation:"fadeIn 0.15s" }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"92vh", overflowY:"auto", animation:"slideUp 0.2s ease" }}>
+              <div style={{ padding:"20px 20px 0", display:"flex", justifyContent:"space-between" }}>
+                <div style={{ fontSize:20, fontWeight:700 }}>{prospectModal.mode==="add"?"Nouveau prospect":"Modifier"}</div>
+                <button onClick={()=>setProspectModal(null)} style={{ background:"#f5f7fa", border:"none", borderRadius:8, width:32, height:32, fontSize:18, color:"#6b7a8d", cursor:"pointer" }}>✕</button>
+              </div>
+              <div style={{ padding:"16px 20px 28px", display:"flex", flexDirection:"column", gap:12 }}>
+                <div className="field"><label>Nom *</label><input value={d.name||""} onChange={e=>setP("name",e.target.value)} placeholder="Résidence…"/></div>
+                <div className="field"><label>Adresse</label><input value={d.address||""} onChange={e=>setP("address",e.target.value)}/></div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Nom syndic</label><input value={d.contact||""} onChange={e=>setP("contact",e.target.value)}/></div>
+                  <div className="field"><label>Tél syndic</label><input value={d.contactInfo||""} onChange={e=>setP("contactInfo",e.target.value)}/></div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Conseiller</label><input value={d.advisorName||""} onChange={e=>setP("advisorName",e.target.value)}/></div>
+                  <div className="field"><label>Tél conseiller</label><input value={d.advisorInfo||""} onChange={e=>setP("advisorInfo",e.target.value)}/></div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="field"><label>Montant estimé (€/mois)</label><input type="number" value={d.montantEstime||""} onChange={e=>setP("montantEstime",e.target.value)}/></div>
+                  <div className="field"><label>Date contact</label><input type="date" value={d.dateContact||""} onChange={e=>setP("dateContact",e.target.value)}/></div>
+                </div>
+                <div className="field"><label>Statut</label>
+                  <select value={d.status} onChange={e=>setP("status",e.target.value)}>
+                    {Object.entries(PROSPECT_STATUSES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+                <div className="field"><label>Notes</label><textarea value={d.notes||""} onChange={e=>setP("notes",e.target.value)}/></div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button className="btn btn-secondary" style={{ flex:1 }} onClick={()=>setProspectModal(null)}>Annuler</button>
+                  <button className="btn btn-primary" style={{ flex:2 }} onClick={saveProspect}>💾 Enregistrer</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PANEL SYNC */}
+      {showSync && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(13,17,23,0.5)", zIndex:400, display:"flex", alignItems:"flex-end", animation:"fadeIn 0.15s" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#fff", borderRadius:"20px 20px 0 0", width:"100%", padding:"24px 20px 32px", animation:"slideUp 0.2s ease" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <div style={{ fontWeight:700, fontSize:18 }}>🔗 Changer d'appareil</div>
+              <button onClick={()=>setShowSync(false)} style={{ background:"#f5f7fa", border:"none", borderRadius:8, width:32, height:32, fontSize:18, color:"#6b7a8d", cursor:"pointer" }}>✕</button>
+            </div>
+            <div style={{ fontSize:12, fontWeight:700, color:"#2e3a4a", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.08em" }}>📤 Exporte depuis cet appareil</div>
+            <button className="btn btn-primary" style={{ width:"100%", justifyContent:"center", marginBottom:20 }}
+              onClick={()=>{ try{navigator.clipboard.writeText(getSyncCode());showToast("📋 Code copié !");}catch{showToast("Copie manuelle nécessaire");} }}>
+              📋 Copier mon code de données
+            </button>
+            <div style={{ fontSize:12, fontWeight:700, color:"#2e3a4a", marginBottom:8, textTransform:"uppercase", letterSpacing:"0.08em" }}>📥 Importe sur ce nouvel appareil</div>
+            <textarea value={syncInput} onChange={e=>setSyncInput(e.target.value)}
+              placeholder="Colle le code ici…"
+              style={{ width:"100%", background:"#f5f7fa", border:"1.5px solid #e2e8ee", borderRadius:8, padding:"10px 12px", fontSize:12, outline:"none", marginBottom:10, minHeight:64, resize:"none", fontFamily:"monospace" }}/>
+            <button className="btn btn-secondary" style={{ width:"100%", justifyContent:"center" }} onClick={()=>importFromCode(syncInput)}>
+              ✅ Importer les données
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST */}
+      {toast && (
+        <div style={{ position:"fixed", bottom:76, left:12, right:12, background:"#1e2530", color:"#fff", padding:"12px 16px", borderRadius:10, fontSize:13, fontWeight:500, zIndex:500, textAlign:"center", borderLeft:`3px solid ${toast.type==="error"?"#e5343a":"#0da860"}`, animation:"slideUp 0.2s" }}>
+          {toast.msg}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+</script>
+</body>
+</html>
